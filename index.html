@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Player Ranking</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#9aa4b2;--accent:#6ee7b7;--danger:#ff7b7b}
+    *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    body{margin:0;background:linear-gradient(180deg,#071029,#061226);color:#e6eef6;padding:28px}
+    .container{max-width:900px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:8px}
+    .controls input[type="search"],.controls button{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:inherit}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.03);padding:14px;border-radius:12px}
+    table{width:100%;border-collapse:collapse}
+    thead th{color:var(--muted);text-align:left;padding:8px 6px;font-size:12px}
+    tbody tr{border-top:1px dashed rgba(255,255,255,0.03)}
+    td{padding:12px 6px;vertical-align:middle}
+    .rank{width:56px;font-weight:600}
+    .player{display:flex;align-items:center;gap:12px}
+    .avatar{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;background:rgba(255,255,255,0.03);color:#fff}
+    .meta{font-size:13px}
+    .score{font-weight:700;text-align:right;width:90px}
+    .barwrap{width:160px}
+    .bar{height:10px;background:rgba(255,255,255,0.03);border-radius:10px;overflow:hidden}
+    .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#60a5fa)}
+    .zero{opacity:0.45}
+    footer{margin-top:10px;color:var(--muted);font-size:13px;text-align:right}
+    @media (max-width:620px){.barwrap{display:none}.score{width:72px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Ranking — Leaderboard</h1>
+      <div class="controls">
+        <input id="search" type="search" placeholder="Search player..." />
+        <button id="sortBtn">Sort: Desc</button>
+        <button id="export">Export CSV</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <table id="table">
+        <thead>
+          <tr>
+            <th class="rank">#</th>
+            <th>Player</th>
+            <th class="barwrap">Progress</th>
+            <th class="score">Score</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <!-- rows injected by JS -->
+        </tbody>
+      </table>
+      <footer id="info">Total players: 0</footer>
+    </section>
+  </div>
+
+  <script>
+    // raw data (name - score)
+    const raw = [
+      ["makkunii",40],
+      ["Amber",15],
+      ["ᴰ∆⨯ᴄᴜᴛɪᴇ?🔹️",12],
+      ["ℙ𝕄∆²ɪᴄᴇ🇲🇵²⁸🏷️☄⁴",11],
+      ["Kaia",9],
+      ["✨️|∆🅻ᴏʀs",8],
+      ["Yuna",8],
+      ["∆⨯𝓝𝓮𝓼𝓽🇲🇵²⁸㍇✨",5],
+      ["Novs",2],
+      ["Ada",2],
+      ["Sehlz",1],
+      ["∆KLAYREA",1],
+      ["ShiCarter",1],
+      ["siopao",1],
+      ["Luna",1],
+      ["∆Dars",1],
+      ["ℓѵ૨•𝐂ʜ∆ɴᴏ🍁🇲🇵²⁸",1],
+      ["∆Jay",0],
+      ["∆ᴋᴜʏᴀʟᴇᴠ",0],
+      ["∆ℓѵ૨•𝐀ʟᴏɴᴇ",0],
+      ["ཀ∆•𝙉𝐀𝘾𝙀",0],
+      ["STAR",0],
+      ["𝙰𝚂𝙷",0],
+      ["∆𝚂ʜᴀʏᴜ",0],
+      ["𝙰𝚒𝚛𝚊",0],
+      ["∆ᴷ",0],
+      ["𝓛𝓸𝓿𝓮",0],
+      ["cha",0],
+      ["Kiddo",0],
+      ["Kiss",0],
+      ["Skyy",0],
+      ["𝑻𝒓𝒊𝒔𝒉𝒂",0],
+      ["☂︎Ⓐᴋͧɪͨ🂱∆",0]
+    ];
+
+    let sortDesc = true;
+    const tbody = document.getElementById('tbody');
+    const info = document.getElementById('info');
+
+    function render(filter = ''){
+      // clone and filter
+      const data = raw
+        .map(([name,score])=>({name,score}))
+        .filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+
+      // sort
+      data.sort((a,b)=> sortDesc ? b.score - a.score || a.name.localeCompare(b.name) : a.score - b.score || a.name.localeCompare(b.name));
+
+      // compute ranks (ties receive same rank)
+      let prevScore = null;
+      let displayRank = 0;
+
+      tbody.innerHTML = '';
+      data.forEach((p,i)=>{
+        const index = i;
+        if (p.score !== prevScore){
+          displayRank = i + 1;
+        }
+        prevScore = p.score;
+
+        const tr = document.createElement('tr');
+        tr.className = p.score === 0 ? 'zero' : '';
+
+        const rankTd = document.createElement('td');
+        rankTd.className = 'rank';
+        rankTd.textContent = displayRank;
+
+        const playerTd = document.createElement('td');
+        const playerWrap = document.createElement('div');
+        playerWrap.className = 'player';
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        const initials = getInitials(p.name);
+        avatar.textContent = initials;
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `<div style="font-weight:700">${escapeHtml(p.name)}</div><div style="font-size:12px;color:var(--muted)">Score: ${p.score}</div>`;
+        playerWrap.appendChild(avatar);
+        playerWrap.appendChild(meta);
+        playerTd.appendChild(playerWrap);
+
+        const barTd = document.createElement('td');
+        barTd.className = 'barwrap';
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        const inner = document.createElement('i');
+        // width relative to top score (avoid division by 0)
+        const top = data.length ? Math.max(...data.map(x=>x.score)) : 1;
+        const pct = top === 0 ? 0 : Math.round((p.score / top) * 100);
+        inner.style.width = pct + '%';
+        inner.title = pct + '% of top';
+        bar.appendChild(inner);
+        barTd.appendChild(bar);
+
+        const scoreTd = document.createElement('td');
+        scoreTd.className = 'score';
+        scoreTd.textContent = p.score;
+
+        tr.appendChild(rankTd);
+        tr.appendChild(playerTd);
+        tr.appendChild(barTd);
+        tr.appendChild(scoreTd);
+        tbody.appendChild(tr);
+      });
+
+      info.textContent = `Showing ${data.length} player${data.length===1?'':'s'} — Sorted ${sortDesc? 'descending':'ascending'}`;
+    }
+
+    function getInitials(name){
+      // take first two visible characters that are letters/numbers if possible
+      const cleaned = name.replace(/[^\p{L}\p{N}\s]/gu,'').trim();
+      if(!cleaned) return name.slice(0,2);
+      const parts = cleaned.split(/\s+/);
+      if(parts.length===1) return parts[0].slice(0,2).toUpperCase();
+      return (parts[0][0]+parts[1][0]).toUpperCase();
+    }
+
+    function escapeHtml(str){ return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+
+    // controls
+    document.getElementById('sortBtn').addEventListener('click',()=>{ sortDesc = !sortDesc; document.getElementById('sortBtn').textContent = 'Sort: ' + (sortDesc ? 'Desc' : 'Asc'); render(document.getElementById('search').value); });
+    document.getElementById('search').addEventListener('input', e => render(e.target.value));
+    document.getElementById('export').addEventListener('click', ()=>{
+      // build CSV from current DOM rows
+      const rows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+        const rank = tr.children[0].textContent.trim();
+        const name = tr.children[1].querySelector('.meta').children[0].textContent.trim();
+        const score = tr.children[3].textContent.trim();
+        return `${rank},"${name.replace(/"/g,'""')}",${score}`;
+      });
+      const csv = ['Rank,Name,Score', ...rows].join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'ranking.csv'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    });
+
+    // initial render
+    render();
+  </script>
+</body>
+</html>
